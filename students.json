@@ -2,21 +2,29 @@
     {
         "enrollment_no": "23152560560",
         "name": "Onkar Bansode",
+        "contact_no": "9846154560",
+        "email_id": "abc283@gmail.con",
         "percentage": 69.0
     },
     {
         "enrollment_no": "23152560563",
         "name": "Tanmay Kanade",
+        "contact_no": "9746514864",
+        "email_id": "tanmay224@gmail.com",
         "percentage": 67.0
     },
     {
         "enrollment_no": "23152560564",
         "name": "Malhar Mhatre",
+        "contact_no": "2846189524",
+        "email_id": "def0002@gmail.com",
         "percentage": 68.0
     },
     {
         "enrollment_no": "23152560565",
         "name": "Shaksham Shetty",
+        "contact_no": "2894659431",
+        "email_id": "xyz05@gmail.com",
         "percentage": 68.0
     }
 ]

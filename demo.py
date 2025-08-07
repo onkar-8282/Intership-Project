@@ -4,168 +4,219 @@ import json, os
 
 FILE = "students.json"
 
-# Load data with error handling
+# ------------------- Data Handling -------------------
 def load_data():
     if os.path.exists(FILE):
         try:
             with open(FILE, "r") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            messagebox.showerror("Error", "Failed to load student data. File may be corrupted.")
-            return []
+            messagebox.showerror("Error", "Failed to load data.")
     return []
 
-# Save data with pretty formatting
 def save_data():
     with open(FILE, "w") as f:
         json.dump(students, f, indent=4)
 
-# Add student
+# ------------------- Refresh Treeview -------------------
+def refresh_tree(treeview, data=None):
+    treeview.delete(*treeview.get_children())
+    for s in data if data else students:
+        treeview.insert("", "end", values=(s["enrollment_no"], s["name"], s["contact_no"], s["email_id"], s["percentage"]))
+
+# ------------------- Add Student -------------------
 def add_student():
-    enrollment_no = enrollment_var.get().strip()
-    name = name_var.get().strip()
-    percentage = percentage_var.get().strip()
+    e = enrollment_var.get().strip()
+    n = name_var.get().strip()
+    c = contact_var.get().strip()
+    em = email_var.get().strip()
+    p = percentage_var.get().strip()
+
+    if not (e and n and c and em and p):
+        messagebox.showwarning("Incomplete", "Fill all fields.")
+        return
 
     try:
-        perc = float(percentage)
+        p = float(p)
     except ValueError:
         messagebox.showwarning("Invalid", "Percentage must be a number.")
         return
 
-    if enrollment_no and name:
-        if any(s["enrollment_no"] == enrollment_no for s in students):
-            messagebox.showwarning("Duplicate", "Enrollment number already exists.")
-            return
-        students.append({"enrollment_no": enrollment_no, "name": name, "percentage": perc})
-        save_data()
-        refresh_table()
-        enrollment_var.set("")
-        name_var.set("")
-        percentage_var.set("")
-    else:
-        messagebox.showwarning("Invalid", "Fill all fields correctly.")
+    if any(s["enrollment_no"] == e for s in students):
+        messagebox.showwarning("Duplicate", "Enrollment number already exists.")
+        return
 
-# Edit selected student
+    students.append({
+        "enrollment_no": e,
+        "name": n,
+        "contact_no": c,
+        "email_id": em,
+        "percentage": p
+    })
+    save_data()
+    refresh_tree(shared_tree)
+    for var in [enrollment_var, name_var, contact_var, email_var, percentage_var]:
+        var.set("")
+    messagebox.showinfo("Success", "Student added successfully.")
+
+# ------------------- Edit Student -------------------
 def edit_student():
-    selected = tree.selection()
-    if selected:
-        idx = tree.index(selected)
-        s = students[idx]
+    selected = shared_tree.selection()
+    if not selected:
+        messagebox.showinfo("Select", "Select a student to edit.")
+        return
 
-        new_enrollment = simpledialog.askstring("Edit Enrollment", "Enrollment:", initialvalue=str(s["enrollment_no"]))
-        new_name = simpledialog.askstring("Edit Name", "Name:", initialvalue=s["name"])
-        new_percentage = simpledialog.askstring("Edit Percentage", "Percentage:", initialvalue=str(s["percentage"]))
+    values = shared_tree.item(selected)["values"]
+    enroll_no = values[0]
 
-        try:
-            perc = float(new_percentage)
-        except:
-            messagebox.showwarning("Invalid", "Percentage must be a number.")
-            return
+    for idx, s in enumerate(students):
+        if s["enrollment_no"] == enroll_no:
+            new_name = simpledialog.askstring("Edit Name", "Name:", initialvalue=s["name"])
+            new_contact = simpledialog.askstring("Edit Contact", "Contact No:", initialvalue=s["contact_no"])
+            new_email = simpledialog.askstring("Edit Email", "Email:", initialvalue=s["email_id"])
+            new_percentage = simpledialog.askstring("Edit Percentage", "Percentage:", initialvalue=str(s["percentage"]))
 
-        try:
-            enroll = int(new_enrollment)
-        except:
-            messagebox.showwarning("Invalid", "Enrollment must be a number.")
-            return
+            if not new_name or not new_contact or not new_email or not new_percentage:
+                messagebox.showwarning("Invalid", "All fields must be filled.")
+                return
 
-        if new_name:
-            students[idx]["name"] = new_name
-            students[idx]["percentage"] = new_percentage
-            students[idx]["enrollment"] = new_enrollment
+            try:
+                new_percentage = float(new_percentage)
+            except:
+                messagebox.showwarning("Invalid", "Percentage must be a number.")
+                return
+
+            students[idx] = {
+                "enrollment_no": enroll_no,
+                "name": new_name,
+                "contact_no": new_contact,
+                "email_id": new_email,
+                "percentage": new_percentage
+            }
             save_data()
-            refresh_table()
+            refresh_tree(shared_tree)
+            messagebox.showinfo("Updated", "Student updated successfully.")
+            return
 
-# Delete student with confirmation
+# ------------------- Delete Student -------------------
 def delete_student():
-    selected = tree.selection()
-    if selected:
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this student?"):
-            idx = tree.index(selected)
-            students.pop(idx)
-            save_data()
-            refresh_table()
+    selected = shared_tree.selection()
+    if not selected:
+        messagebox.showinfo("Select", "Select a student to delete.")
+        return
 
-# Refresh table
-def refresh_table(filtered=None):
-    tree.delete(*tree.get_children())
-    data = filtered if filtered is not None else students
-    for s in data:
-        tree.insert("", tk.END, values=(s["enrollment_no"], s["name"], s["percentage"]))
+    values = shared_tree.item(selected)["values"]
+    enroll_no = values[0]
 
-# Search filter
-def search_student():
-    query = search_var.get().lower().strip()
+    for idx, s in enumerate(students):
+        if s["enrollment_no"] == enroll_no:
+            if messagebox.askyesno("Confirm", "Delete selected student?"):
+                students.pop(idx)
+                save_data()
+                refresh_tree(shared_tree)
+                messagebox.showinfo("Deleted", "Student deleted successfully.")
+                return
+
+# ------------------- Search -------------------
+def search(treeview, query):
+    query = query.lower().strip()
     filtered = [s for s in students if query in s["enrollment_no"].lower() or query in s["name"].lower()]
-    refresh_table(filtered)
+    refresh_tree(treeview, filtered)
 
-# Clear search
-def clear_search():
-    search_var.set("")
-    refresh_table()
-
-# GUI setup
+# ------------------- GUI Setup -------------------
 root = tk.Tk()
-root.title("Student Management")
-root.geometry("520x580")
-root.resizable(False, False)
+root.title("Student Management System")
+root.geometry("950x600")
 
-# Form frame
-form = tk.Frame(root)
-form.pack(pady=10)
+# ------------------- Top Navigation -------------------
+def show_frame(frame):
+    frame.tkraise()
+    refresh_tree(shared_tree)
+
+menubar = tk.Menu(root)
+root.config(menu=menubar)
+
+frame_container = tk.Frame(root)
+frame_container.pack(fill="both", expand=True)
+
+# ------------------- Shared Treeview -------------------
+def create_treeview(parent):
+    frame = tk.Frame(parent)
+    frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    tree = ttk.Treeview(frame, columns=("Enroll", "Name", "Contact", "Email", "Perc"), show="headings", height=15)
+    for col in ("Enroll", "Name", "Contact", "Email", "Perc"):
+        tree.heading(col, text=col)
+        tree.column(col, width=170, anchor="center")
+
+    vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+    tree.configure(yscroll=vsb.set)
+
+    tree.grid(row=0, column=0, sticky="nsew")
+    vsb.grid(row=0, column=1, sticky="ns")
+
+    frame.rowconfigure(0, weight=1)
+    frame.columnconfigure(0, weight=1)
+
+    return tree
+
+shared_tree = create_treeview(root)
+
+# ------------------- Add Page -------------------
+add_frame = tk.Frame(frame_container)
+add_frame.grid(row=0, column=0, sticky="nsew")
 
 enrollment_var = tk.StringVar()
 name_var = tk.StringVar()
+contact_var = tk.StringVar()
+email_var = tk.StringVar()
 percentage_var = tk.StringVar()
 
-tk.Label(form, text="Enrollment No:").grid(row=0, column=0, sticky="e")
-tk.Entry(form, textvariable=enrollment_var).grid(row=0, column=1)
+tk.Label(add_frame, text="Add Student", font=("Arial", 16)).grid(row=0, columnspan=2, pady=10)
 
-tk.Label(form, text="Name:").grid(row=1, column=0, sticky="e")
-tk.Entry(form, textvariable=name_var).grid(row=1, column=1)
+tk.Label(add_frame, text="Enrollment No").grid(row=1, column=0, sticky="e", padx=10, pady=5)
+tk.Entry(add_frame, textvariable=enrollment_var).grid(row=1, column=1, padx=10)
 
-tk.Label(form, text="Percentage:").grid(row=2, column=0, sticky="e")
-tk.Entry(form, textvariable=percentage_var).grid(row=2, column=1)
+tk.Label(add_frame, text="Name").grid(row=2, column=0, sticky="e", padx=10, pady=5)
+tk.Entry(add_frame, textvariable=name_var).grid(row=2, column=1, padx=10)
 
-tk.Button(form, text="Add Student", command=add_student, bg="blue", fg="white").grid(row=3, columnspan=2, pady=5)
+tk.Label(add_frame, text="Contact No").grid(row=3, column=0, sticky="e", padx=10, pady=5)
+tk.Entry(add_frame, textvariable=contact_var).grid(row=3, column=1, padx=10)
 
-# Search frame
-search_frame = tk.Frame(root)
-search_frame.pack(pady=5)
+tk.Label(add_frame, text="Email ID").grid(row=4, column=0, sticky="e", padx=10, pady=5)
+tk.Entry(add_frame, textvariable=email_var).grid(row=4, column=1, padx=10)
 
-search_var = tk.StringVar()
-tk.Entry(search_frame, textvariable=search_var, width=30).grid(row=0, column=0, padx=5)
-tk.Button(search_frame, text="🔍", command=search_student).grid(row=0, column=1, padx=5)
-tk.Button(search_frame, text="❌", command=clear_search).grid(row=0, column=2)
+tk.Label(add_frame, text="Percentage").grid(row=5, column=0, sticky="e", padx=10, pady=5)
+tk.Entry(add_frame, textvariable=percentage_var).grid(row=5, column=1, padx=10)
 
-# Table Frame
-table_frame = tk.Frame(root)
-table_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+tk.Button(add_frame, text="Submit", command=add_student).grid(row=6, columnspan=2, pady=20)
 
-tree = ttk.Treeview(table_frame, columns=("Enrollment", "Name", "Percentage"), show="headings")
-tree.heading("Enrollment", text="Enrollment No")
-tree.heading("Name", text="Name")
-tree.heading("Percentage", text="Percentage")
+# ------------------- Edit Page -------------------
+edit_frame = tk.Frame(frame_container)
+edit_frame.grid(row=0, column=0, sticky="nsew")
 
-tree.column("Enrollment", width=150)
-tree.column("Name", width=150)
-tree.column("Percentage", width=150)
+edit_search_var = tk.StringVar()
+tk.Label(edit_frame, text="Edit Student", font=("Arial", 16)).pack(pady=10)
+tk.Entry(edit_frame, textvariable=edit_search_var, width=40).pack()
+tk.Button(edit_frame, text="Search", command=lambda: search(shared_tree, edit_search_var.get())).pack(pady=5)
+tk.Button(edit_frame, text="Edit Selected Student", command=edit_student).pack(pady=10)
 
-tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+# ------------------- Delete Page -------------------
+delete_frame = tk.Frame(frame_container)
+delete_frame.grid(row=0, column=0, sticky="nsew")
 
-# Scrollbar only for Treeview
-scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
-tree.configure(yscroll=scrollbar.set)
-scrollbar.pack(side="right", fill="y")
+delete_search_var = tk.StringVar()
+tk.Label(delete_frame, text="Delete Student", font=("Arial", 16)).pack(pady=10)
+tk.Entry(delete_frame, textvariable=delete_search_var, width=40).pack()
+tk.Button(delete_frame, text="Search", command=lambda: search(shared_tree, delete_search_var.get())).pack(pady=5)
+tk.Button(delete_frame, text="Delete Selected Student", command=delete_student).pack(pady=10)
 
-# Button Frame
-btn_frame = tk.Frame(root)
-btn_frame.pack(pady=10)
+# ------------------- Navigation Menu -------------------
+menubar.add_command(label="Add Student", command=lambda: show_frame(add_frame))
+menubar.add_command(label="Edit Student", command=lambda: show_frame(edit_frame))
+menubar.add_command(label="Delete Student", command=lambda: show_frame(delete_frame))
 
-tk.Button(btn_frame, text="Edit", width=15, command=edit_student, bg="green", fg="white").grid(row=0, column=0, padx=5)
-tk.Button(btn_frame, text="Delete", width=15, command=delete_student, bg="red", fg="white").grid(row=0, column=1, padx=5)
-
-# Load and show data
+# ------------------- Load and Start -------------------
 students = load_data()
-refresh_table()
-
+show_frame(add_frame)
 root.mainloop()
