@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
-import json, os
+from tkinter import ttk, messagebox
+import json, os, re
 
 FILE = "students.json"
 
@@ -15,8 +15,11 @@ def load_data():
     return []
 
 def save_data():
-    with open(FILE, "w") as f:
-        json.dump(students, f, indent=4)
+    try:
+        with open(FILE, "w") as f:
+            json.dump(students, f, indent=4)
+    except Exception as e:
+        messagebox.showerror("Save Error", f"Could not save data:\n{e}")
 
 # ------------------- Refresh Treeview -------------------
 def refresh_tree(treeview, data=None):
@@ -34,6 +37,14 @@ def add_student():
 
     if not (e and n and c and em and p):
         messagebox.showwarning("Incomplete", "Fill all fields.")
+        return
+
+    if not re.match(r"^\d{10}$", c):
+        messagebox.showwarning("Invalid", "Contact must be 10 digits.")
+        return
+
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", em):
+        messagebox.showwarning("Invalid", "Invalid email format.")
         return
 
     try:
@@ -59,63 +70,27 @@ def add_student():
         var.set("")
     messagebox.showinfo("Success", "Student added successfully.")
 
-# ------------------- Edit Student -------------------
-def edit_student():
-    selected = shared_tree.selection()
-    if not selected:
-        messagebox.showinfo("Select", "Select a student to edit.")
-        return
-
-    values = shared_tree.item(selected)["values"]
-    enroll_no = values[0]
-
-    for idx, s in enumerate(students):
-        if s["enrollment_no"] == enroll_no:
-            new_name = simpledialog.askstring("Edit Name", "Name:", initialvalue=s["name"])
-            new_contact = simpledialog.askstring("Edit Contact", "Contact No:", initialvalue=s["contact_no"])
-            new_email = simpledialog.askstring("Edit Email", "Email:", initialvalue=s["email_id"])
-            new_percentage = simpledialog.askstring("Edit Percentage", "Percentage:", initialvalue=str(s["percentage"]))
-
-            if not new_name or not new_contact or not new_email or not new_percentage:
-                messagebox.showwarning("Invalid", "All fields must be filled.")
-                return
-
-            try:
-                new_percentage = float(new_percentage)
-            except:
-                messagebox.showwarning("Invalid", "Percentage must be a number.")
-                return
-
-            students[idx] = {
-                "enrollment_no": enroll_no,
-                "name": new_name,
-                "contact_no": new_contact,
-                "email_id": new_email,
-                "percentage": new_percentage
-            }
-            save_data()
-            refresh_tree(shared_tree)
-            messagebox.showinfo("Updated", "Student updated successfully.")
-            return
-
-# ------------------- Delete Student -------------------
+# ------------------- Delete Student (Multiple Support) -------------------
 def delete_student():
-    selected = shared_tree.selection()
-    if not selected:
-        messagebox.showinfo("Select", "Select a student to delete.")
+    selected_items = shared_tree.selection()
+    if not selected_items:
+        messagebox.showinfo("Select", "Select student(s) to delete.")
         return
 
-    values = shared_tree.item(selected)["values"]
-    enroll_no = values[0]
+    to_delete = []
+    for item in selected_items:
+        values = shared_tree.item(item)["values"]
+        enroll_no = values[0]
+        to_delete.append(enroll_no)
 
-    for idx, s in enumerate(students):
-        if s["enrollment_no"] == enroll_no:
-            if messagebox.askyesno("Confirm", "Delete selected student?"):
-                students.pop(idx)
-                save_data()
-                refresh_tree(shared_tree)
-                messagebox.showinfo("Deleted", "Student deleted successfully.")
-                return
+    if not messagebox.askyesno("Confirm", f"Delete {len(to_delete)} student(s)?"):
+        return
+
+    global students
+    students = [s for s in students if s["enrollment_no"] not in to_delete]
+    save_data()
+    refresh_tree(shared_tree)
+    messagebox.showinfo("Deleted", f"{len(to_delete)} student(s) deleted successfully.")
 
 # ------------------- Search -------------------
 def search(treeview, query):
@@ -144,7 +119,7 @@ def create_treeview(parent):
     frame = tk.Frame(parent)
     frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-    tree = ttk.Treeview(frame, columns=("Enroll", "Name", "Contact", "Email", "Perc"), show="headings", height=15)
+    tree = ttk.Treeview(frame, columns=("Enroll", "Name", "Contact", "Email", "Perc"), show="headings", height=15, selectmode="extended")
     for col in ("Enroll", "Name", "Contact", "Email", "Perc"):
         tree.heading(col, text=col)
         tree.column(col, width=170, anchor="center")
@@ -199,7 +174,74 @@ edit_search_var = tk.StringVar()
 tk.Label(edit_frame, text="Edit Student", font=("Arial", 16)).pack(pady=10)
 tk.Entry(edit_frame, textvariable=edit_search_var, width=40).pack()
 tk.Button(edit_frame, text="Search", command=lambda: search(shared_tree, edit_search_var.get())).pack(pady=5)
-tk.Button(edit_frame, text="Edit Selected Student", command=edit_student).pack(pady=10)
+
+edit_enrollment_var = tk.StringVar()
+edit_name_var = tk.StringVar()
+edit_contact_var = tk.StringVar()
+edit_email_var = tk.StringVar()
+edit_percentage_var = tk.StringVar()
+
+form_frame = tk.Frame(edit_frame)
+form_frame.pack(pady=10)
+
+tk.Label(form_frame, text="Enrollment No").grid(row=0, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(form_frame, textvariable=edit_enrollment_var, state="disabled").grid(row=0, column=1)
+
+tk.Label(form_frame, text="Name").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(form_frame, textvariable=edit_name_var).grid(row=1, column=1)
+
+tk.Label(form_frame, text="Contact No").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(form_frame, textvariable=edit_contact_var).grid(row=2, column=1)
+
+tk.Label(form_frame, text="Email ID").grid(row=3, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(form_frame, textvariable=edit_email_var).grid(row=3, column=1)
+
+tk.Label(form_frame, text="Percentage").grid(row=4, column=0, padx=10, pady=5, sticky="e")
+tk.Entry(form_frame, textvariable=edit_percentage_var).grid(row=4, column=1)
+
+def on_row_select(event):
+    selected = shared_tree.selection()
+    if not selected:
+        return
+    values = shared_tree.item(selected[0])["values"]
+    edit_enrollment_var.set(values[0])
+    edit_name_var.set(values[1])
+    edit_contact_var.set(values[2])
+    edit_email_var.set(values[3])
+    edit_percentage_var.set(values[4])
+
+def update_student():
+    enroll = edit_enrollment_var.get()
+    name = edit_name_var.get().strip()
+    contact = edit_contact_var.get().strip()
+    email = edit_email_var.get().strip()
+    perc = edit_percentage_var.get().strip()
+
+    if not (name and contact and email and perc):
+        messagebox.showwarning("Incomplete", "All fields must be filled.")
+        return
+
+    try:
+        perc = float(perc)
+    except ValueError:
+        messagebox.showwarning("Invalid", "Percentage must be a number.")
+        return
+
+    for idx, s in enumerate(students):
+        if s["enrollment_no"] == enroll:
+            students[idx]["name"] = name
+            students[idx]["contact_no"] = contact
+            students[idx]["email_id"] = email
+            students[idx]["percentage"] = perc
+            save_data()
+            refresh_tree(shared_tree)
+            messagebox.showinfo("Updated", "Student updated successfully.")
+            return
+
+tk.Button(edit_frame, text="Update Student", command=update_student).pack(pady=10)
+tk.Button(edit_frame, text="Clear Fields", command=lambda: [v.set("") for v in [edit_enrollment_var, edit_name_var, edit_contact_var, edit_email_var, edit_percentage_var]]).pack()
+
+shared_tree.bind("<<TreeviewSelect>>", on_row_select)
 
 # ------------------- Delete Page -------------------
 delete_frame = tk.Frame(frame_container)
